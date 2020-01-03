@@ -31,7 +31,7 @@ def get_mdst_list(is_data, exp, run_start = 1, run_end = 9999,
         is_data (bool): data or MC
         exp (int): exp number
         run_start (int): run number start
-        run_end (int): run number end (not included)
+        run_end (int): run number end
         event_type (str): event type
         data_type (str): data type
         belle_level (str): Belle level
