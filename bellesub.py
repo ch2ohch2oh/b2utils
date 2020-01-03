@@ -191,14 +191,21 @@ def parse_arguments():
     args = parser.parse_args()
     return args
 
+# Set up logger for the module
+logging.basicConfig(format = '[%(levelname)s] %(funcName)s: %(message)s', level = logging.DEBUG, stream = sys.stdout)
+
 if __name__ == '__main__'
-    create_dir(outdir, clear = 'ask')
+    args = parse_arguments()
+    
+    create_dir(outdir.outdir)
+    
+    mdst_list = get_mdst_list()
     # exp 8 continuum and 4S
     files_cont = get_data(proc = 'proc9', exp = 8, datatype = 'Continuum')
     files_cont = files_cont[:100]
     cmds = create_jobs(outdir, script, files_cont)
     submit_jobs(cmds, nworkers = 10)
     
-    logging.basicConfig(format = '[%(levelname)s] %(funcName)s: %(message)s', level = logging.DEBUG, stream = sys.stdout)
+    
 
     submit_lambda()
