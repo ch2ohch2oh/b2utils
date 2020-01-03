@@ -19,7 +19,8 @@ import b2biiConversion as b2c
 BELLE_EVENT_TYPES = ['Any', 'evtgen-mixed', 'evtgen-charged', 'evtgen-charm', 'evtgen-uds']
 
 # Belle data types
-BELLE_DATA_TYPES = ['Any', 'on_resonance']
+BELLE_DATA_TYPES = ['Any', 'on_resonance', 'continuum', '5S_scan', '5S_onresonance', 
+    '1S_scan', '2S_scan', '3S_scan']
 
 def get_mdst_list(is_data, exp, run_start = 1, run_end = 9999, 
                   event_type = 'Any', data_type = 'Any', 
@@ -47,10 +48,8 @@ def get_mdst_list(is_data, exp, run_start = 1, run_end = 9999,
         raise ValueError(f'Invalid data_type: {data_type}')
 
     if not is_data:
-        assert event_type in ['Any', 'evtgen-mixed', 'evtgen-charged', 'evtgen-charm', 'evtgen-uds']
         url =  f'http://bweb3.cc.kek.jp/montecarlo.php?ex={exp}&rs={run_start}&re={run_end}&ty={event_type}&dt={data_type}&bl={belle_level}&st={stream}'
     else:
-        assert data_type in BELLE_DATA_TYPES
         url = f'http://bweb3.cc.kek.jp/mdst.php?ex={exp}&rs={run_start}&re={run_end}&skm={skim}&dt={data_type}&bl={belle_level}'
     logging.info(f'Getting mdst from {url}')
     mdst_list = b2c.parse_process_url(url)
