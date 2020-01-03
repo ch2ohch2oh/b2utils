@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Belle job submission
+# Belle job commands
 #
 import os
 import sys
@@ -57,58 +57,52 @@ def get_mdst_list(is_data, exp, run_start = 1, run_end = 9999,
         logging.info("The first three mdst files are:")
         for i in range(3):
             logging.info(f"{mdst_list[i]}")
-    return mdst_list
+    return mdst_list    
 
-
-def get_data(proc = 'proc9', exp = 8, datatype = 'Continuum', skim = 'hlt_hadron', filetype = 'mdst', verbose = 1):
-    """
-    Get list of root files for real data on KEK.
-    """
-    if proc == 'proc9':
-        basedir = '/group/belle2/dataprod/Data/release-03-02-02/DB00000654/proc9'
-        goodruns = glob.glob(os.path.join(basedir, "e%04d" % exp, datatype, 'GoodRuns', '*'))
-        goodcount = len(goodruns)
-        files = []
-        for run in goodruns:
-            files += glob.glob(os.path.join(run, 'skim', skim, filetype, 'sub00', '*.root'))
-    else:
-        raise Exception(f'Invalid data reprocessing {proc}')
-    
-    logging.info(f"proc = {proc} exp = {exp} datatype = {datatype} skim = {skim} filetype = {filetype}")
-    logging.info(f'number of good runs = {len(goodruns)}')
-    logging.info(f"number of root files in the list = {len(files)}")
-    return files
-    
-
-def create_dir(path, clear = 'ask'):
+def create_dir(path, clear = None):
     """
     Create an directory. If the given directory already exists then will clear this directory
     per user request.
+
+    Parameters:
+        path (str)  - path to create
+        clear (bool) - clear the path or not if the path already exists
+                        True    - clear the path
+                        False   - do no clear the path
+                        None    - ask the user
     """
-    logging.info(f'Creating dir: {path}')
+    logging.debug(f'Creating dir: {path}')
     if os.path.isdir(path) and len(os.listdir(path)) > 0:
-        if clear == 'ask':
-            choice = input('Output dir not empty. Clear or not? [y/n] ').strip().lower()
-        elif clear == 'yes':
-            choice = 'y'
-        elif clear == 'no':
-            choice = 'n'
-        else:
-            choice = 'n'
-            logging.warning('Invalid choice. Will not clear the dir.')
-        
-        if choice == '' or choice.startswith('y'):
+        if clear == None:
+            print(f"Path {path} not empty")
+            clear = input('Clear the path or not? [y/n] ').strip().lower().startswith('y')
+        if clear == True:
             logging.info(f'Clearing the contents of {path}')
             shutil.rmtree(path)
     os.makedirs(path, exist_ok = True)
+    # Check again the output dir exists
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Path {path} does not exist!")
 
-def create_jobs(outdir, script, infiles, q = 's', b2opt = ''):
+def create_bsub_cmds(outdir, script, infiles, q = 's', b2opt = ''):
     """
-    Create bsub job submission cmd lines based on input files.
+    Create bsub job commands cmd lines based on input files.
     
+    Parameters:
+        outdir (str)        - output dir
+        script (str)        - steering script 
+        infiles (list)      - input mdst file list
+        q (str)             - bsub queue (default = 's')
+        b2opt (str)         - basf2 options (default = '')
     Returns:
-        A list of bsubs commands to be ran (using multiprocessing)
+        A list of  commands
     """
+    # Check file exists
+    if not os.path.exists(outdir):
+        raise FileNotFoundError('outdir ({outdir}) does not exist!')
+    if not os.path.exists(script):
+        raise FileNotFoundError('script ({script}) does not exist!')
+    
     cmdlist = []
     for infile in infiles:
         base = os.path.basename(infile)
@@ -116,45 +110,24 @@ def create_jobs(outdir, script, infiles, q = 's', b2opt = ''):
         outfile = os.path.join(outdir, 'ntuple.' + base)
         cmdlist += [f'bsub -q s -oo {logfile} basf2 {b2opt} {script} {infile} {outfile} >> bsub.log']
 
-    logging.info(f"{len(cmdlist)} jobs created")
-    logging.info(f"The first job: {cmdlist[0]}")
+    logging.info(f"{len(cmdlist)} bsub commands created")
+    logging.info(f"The first bsub command: {cmdlist[0]}")
     return cmdlist
 
-def fake_system(*args, **kwargs):def create_dir(path, clear = 'ask'):
+def run_cmds(cmdlist, nworkers = 8):
     """
-    Create an directory. If the given directory already exists then will clear this directory
-    per user request.
-    """
-    logging.info(f'Creating dir: {path}')
-    if os.path.isdir(path) and len(os.listdir(path)) > 0:
-        if clear == 'ask':
-            choice = input('Output dir not empty. Clear or not? [y/n] ').strip().lower()
-        elif clear == 'yes':
-            choice = 'y'
-        elif clear == 'no':
-            choice = 'n'
-        else:
-            choice = 'n'
-            logging.warning('Invalid choice. Will not clear the dir.')
-        
-        if choice == '' or choice.startswith('y'):
-            logging.info(f'Clearing the contents of {path}')
-            shutil.rmtree(path)
-    os.makedirs(path, exist_ok = True)
-    """
-    A fake os.system to test multiprocessing job submission.
-    """
-    time.sleep(1)
-    return 0
-
-def submit_jobs(cmdlist, nworkers = 8):
-    """
-    Submit all jobs in cmdlist in parallel using multiprocessing
+    Run commands in parallel using multiprocessing.
+    
+    Parameters:
+        cmdlist (list) - list of commands
+        nworkers (int) - number of workers to run the commans
+    Returns:
+        Number of failed commands
     """
     pool = mpl.Pool(processes = nworkers)
     
-    logging.info(f"{len(cmdlist)} jobs to submit")
-    logging.info(f'Started to submit jobs with {nworkers} workers')
+    logging.info(f"{len(cmdlist)} commands to run")
+    logging.info(f'nworkers = {nworkers}')
     
     bar = tqdm(total = len(cmdlist))
     results = []
@@ -168,31 +141,28 @@ def submit_jobs(cmdlist, nworkers = 8):
     pool.close()
     pool.join()
     
-    logging.debug('Checking for failed jobs submission...')
+    logging.debug('Checking for failed commands...')
     assert len(results) == len(cmdlist)
     failed = []
     for i in range(len(results)):
         if results[i] != 0:
             failed += cmdlist[i]
+    
     if len(failed) == 0:
-        logging.info(colored(f"{len(failed)} failed submission", 'green'))
+        logging.info(colored("No failed commands", 'green'))
     else:
-        logging.info(colored(f"{len(failed)} failed submission", 'red'))
+        logging.info(colored(f"{len(failed)} failed commands", 'red'))
     if len(failed) > 0:
-        logging.warning(f"The first failed submission: {failed[0]}")
-    
-def submit_lambda():
-    print("lambda exp 8 continuum")
-    outdir = 'lambda_exp8'
-    script = 'test_lambdas.py'
-    
-    create_dir(outdir, clear = 'ask')
-    # exp 8 continuum and 4S
-    files_cont = get_data(proc = 'proc9', exp = 8, datatype = 'Continuum')
-    files_cont = files_cont[:100]
-    cmds = create_jobs(outdir, script, files_cont)
-    submit_jobs(cmds, nworkers = 10)
+        logging.warning(f"The first failed commands: {failed[0]}")
+    return len(failed)
 
+def parse_arguments():
+    """
+    Parse command line arguments
+
+    Returns:
+        argparse parser.
+    """
     parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('script', help = 'steering script to run')
@@ -219,6 +189,15 @@ def submit_lambda():
         parser.print_help(sys.stderr)
         sys.exit(1)
     args = parser.parse_args()
+    return args
+
+if __name__ == '__main__'
+    create_dir(outdir, clear = 'ask')
+    # exp 8 continuum and 4S
+    files_cont = get_data(proc = 'proc9', exp = 8, datatype = 'Continuum')
+    files_cont = files_cont[:100]
+    cmds = create_jobs(outdir, script, files_cont)
+    submit_jobs(cmds, nworkers = 10)
     
     logging.basicConfig(format = '[%(levelname)s] %(funcName)s: %(message)s', level = logging.DEBUG, stream = sys.stdout)
 
