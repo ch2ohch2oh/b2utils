@@ -11,6 +11,7 @@ import multiprocessing as mpl
 import time
 import shutil
 from termcolor import colored
+import argparse
 
 import b2biiConversion as b2c
 
@@ -27,15 +28,15 @@ def get_mdst_list(is_data, exp, run_start = 1, run_end = 9999,
     Return Belle mdst file list on KEKCC based on experiment information.
 
     Parameters:
-        is_data (bool)
-        exp (int)
-        run_start (int)
-        run_end (int)
-        event_type (str)
-        data_type (str)
-        belle_level (str)
-        stream (str)
-        skim (str)
+        is_data (bool): data or MC
+        exp (int): exp number
+        run_start (int): run number start
+        run_end (int): run number end (not included)
+        event_type (str): event type
+        data_type (str): data type
+        belle_level (str): Belle level
+        stream (str): MC stream number
+        skim (str): skim type
     Returns:
         A list of mdst files on KEKCC.
     """
@@ -53,7 +54,7 @@ def get_mdst_list(is_data, exp, run_start = 1, run_end = 9999,
         url = f'http://bweb3.cc.kek.jp/mdst.php?ex={exp}&rs={run_start}&re={run_end}&skm={skim}&dt={data_type}&bl={belle_level}'
     logging.info(f'Getting mdst from {url}')
     mdst_list = b2c.parse_process_url(url)
-    if len(mdst) >= 3:
+    if len(mdst_list) >= 3:
         logging.info("The first three mdst files are:")
         for i in range(3):
             logging.info(f"{mdst_list[i]}")
@@ -65,11 +66,11 @@ def create_dir(path, clear = None):
     per user request.
 
     Parameters:
-        path (str)  - path to create
-        clear (bool) - clear the path or not if the path already exists
-                        True    - clear the path
-                        False   - do no clear the path
-                        None    - ask the user
+        path (str): path to create
+        clear (bool): clear the path or not if the path already exists.
+            True -> clear the path
+            False -> do no clear the path
+            None -> ask the user
     """
     logging.debug(f'Creating dir: {path}')
     if os.path.isdir(path) and len(os.listdir(path)) > 0:
@@ -89,11 +90,11 @@ def create_bsub_cmds(outdir, script, infiles, q = 's', b2opt = ''):
     Create bsub job commands cmd lines based on input files.
     
     Parameters:
-        outdir (str)        - output dir
-        script (str)        - steering script 
-        infiles (list)      - input mdst file list
-        q (str)             - bsub queue (default = 's')
-        b2opt (str)         - basf2 options (default = '')
+        outdir (str): output dir
+        script (str): steering script 
+        infiles (list): input mdst file list
+        q (str): bsub queue (default = 's')
+        b2opt (str): basf2 options (default = '')
     Returns:
         A list of  commands
     """
@@ -119,8 +120,8 @@ def run_cmds(cmdlist, nworkers = 8):
     Run commands in parallel using multiprocessing.
     
     Parameters:
-        cmdlist (list) - list of commands
-        nworkers (int) - number of workers to run the commans
+        cmdlist (list) list of commands
+        nworkers (int) number of workers to run the commans
     Returns:
         Number of failed commands
     """
@@ -194,18 +195,27 @@ def parse_arguments():
 # Set up logger for the module
 logging.basicConfig(format = '[%(levelname)s] %(funcName)s: %(message)s', level = logging.DEBUG, stream = sys.stdout)
 
-if __name__ == '__main__'
+if __name__ == '__main__':
     args = parse_arguments()
-    
-    create_dir(outdir.outdir)
-    
-    mdst_list = get_mdst_list()
-    # exp 8 continuum and 4S
-    files_cont = get_data(proc = 'proc9', exp = 8, datatype = 'Continuum')
-    files_cont = files_cont[:100]
-    cmds = create_jobs(outdir, script, files_cont)
-    submit_jobs(cmds, nworkers = 10)
-    
-    
 
-    submit_lambda()
+    create_dir(args.outdir)
+    
+    mdst_list = get_mdst_list(
+        is_data = args.is_data,
+        exp = args.exp,
+        run_start = args.run_start,
+        run_end = args.run_end,
+        event_type = args.event_type,
+        data_type = args.data_type,
+        belle_level = args.belle_level,
+        stream = args.stream,
+        skim = args.skim
+    )
+    
+    if len(mdst_list) == 0:
+        logging.warning('Zero mdst found for specified experiment info.')
+        sys.exit(1)
+    
+    cmds = create_bsub_cmds(args.outdir, args.script, mdst_list)
+    failed_count = run_cmds(cmds)
+    
