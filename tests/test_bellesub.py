@@ -28,7 +28,7 @@ def test_file_number():
     assert len(mdst_list) == 16984
 
     # http://bweb3.cc.kek.jp/montecarlo.php?ex=55&rs=1&re=100&ty=evtgen-charm&dt=on_resonance&bl=caseB&st=0
-    mdst_list = get_mdst_list(is_data = False, exp = 55, stream = 0, event_type = 'evtgen-charm', data_type = 'on_resonance')
+    mdst_list = get_mdst_list(is_data = False, exp = 55, stream = 0, run_end = 100, event_type = 'evtgen-charm', data_type = 'on_resonance')
     assert len(mdst_list) == 50
 
 def test_data_type():
