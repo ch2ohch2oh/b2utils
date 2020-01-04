@@ -5,13 +5,16 @@
 import os
 import sys
 import glob
+import shutil
+
 from tqdm import tqdm
 import logging
-import multiprocessing as mpl
 import time
-import shutil
+import random
 from termcolor import colored
 import argparse
+
+import multiprocessing as mpl
 
 import b2biiConversion as b2c
 
@@ -99,20 +102,24 @@ def create_bsub_cmds(outdir, script, infiles, q = 's', b2opt = ''):
     """
     # Check file exists
     if not os.path.exists(outdir):
-        raise FileNotFoundError('outdir ({outdir}) does not exist!')
+        raise FileNotFoundError(f'outdir ({outdir}) does not exist!')
     if not os.path.exists(script):
-        raise FileNotFoundError('script ({script}) does not exist!')
+        raise FileNotFoundError(f'script ({script}) does not exist!')
     
     cmdlist = []
     for infile in infiles:
         base = os.path.basename(infile)
         logfile = os.path.join(outdir, base + '.log')
-        outfile = os.path.join(outdir, 'ntuple.' + base)
+        outfile = os.path.join(outdir, base + '.root')
         cmdlist += [f'bsub -q s -oo {logfile} basf2 {b2opt} {script} {infile} {outfile} >> bsub.log']
 
     logging.info(f"{len(cmdlist)} bsub commands created")
     logging.info(f"The first bsub command: {cmdlist[0]}")
     return cmdlist
+
+def dummy(*args):
+    """ A dummy function used for replacing os.system for testing"""
+    return 0
 
 def run_cmds(cmdlist, nworkers = 8):
     """
@@ -135,14 +142,17 @@ def run_cmds(cmdlist, nworkers = 8):
     def log_result(result):
         results.append(result)
         bar.update()
-    
+        
     for cmd in cmdlist:
-        pool.apply_async(os.system, [cmd], callback = log_result)
+        pool.apply_async(dummy, [cmd], callback = log_result)
     pool.close()
     pool.join()
+    bar.close()
     
     logging.debug('Checking for failed commands...')
-    assert len(results) == len(cmdlist)
+    if len(results) != len(cmdlist):
+        raise Exception('Command return value list length does not match input!')
+    
     failed = []
     for i in range(len(results)):
         if results[i] != 0:
@@ -206,7 +216,6 @@ if __name__ == '__main__':
         run_end = args.run_end,
         event_type = args.event_type,
         data_type = args.data_type,
-        belle_level = args.belle_level,
         stream = args.stream,
         skim = args.skim
     )
